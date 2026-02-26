@@ -30,7 +30,7 @@ Trained MobileNetV2 on 226,000+ labeled leaf images — 99.6% validation accurac
 
 ## Installation
 ```bash
-git clone https://github.com/YOUR_USERNAME/plantdoc.git
+git clone https://github.com/CharifKati/plantdoc.git
 cd plantdoc/code
 python -m venv venv
 venv\Scripts\activate.bat
