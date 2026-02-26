@@ -1,0 +1,26 @@
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<div id="map" style="height: 500px;"></div>
+
+<script>
+  const map = L.map('map').setView([20, 0], 2);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+  fetch('/map').then(r => r.json()).then(data => {
+    data.points.forEach(p => {
+      const marker = L.circleMarker([p.lat, p.lng], {
+        color: p.color,
+        fillColor: p.color,
+        fillOpacity: 0.8,
+        radius: 10,
+      }).addTo(map);
+
+      marker.bindPopup(`
+        <b>${p.top_prediction}</b><br>
+        Severity: ${p.severity}<br>
+        <small>${p.timestamp}</small>
+      `);
+    });
+  });
+</script>

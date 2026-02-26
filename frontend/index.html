@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PlantDoc Vision</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Literata:ital,opsz,wght@0,7..72,300;0,7..72,400;1,7..72,300&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0d1008;
+      --surface:    #141a0e;
+      --surface-2:  #1c2414;
+      --border:     #2a3820;
+      --border-2:   #374d27;
+      --green:      #7bbf4e;
+      --green-dim:  #4a7a2a;
+      --green-glow: rgba(123,191,78,.18);
+      --amber:      #d4943a;
+      --red:        #c94040;
+      --red-dim:    rgba(201,64,64,.15);
+      --text:       #d4e8c2;
+      --text-dim:   #7a9860;
+      --text-muted: #3d5c28;
+      --mono:       'DM Mono', monospace;
+      --serif:      'DM Serif Display', serif;
+      --body:       'Literata', Georgia, serif;
+    }
+
+    html { font-size: 16px; scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--body);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none; z-index: 0;
+    }
+
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: .4;
+      pointer-events: none; z-index: 0;
+    }
+
+    * { position: relative; z-index: 1; }
+
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px 80px; }
+
+    /* ── Header ───────────────────────────────────────────── */
+    header {
+      padding: 48px 0 40px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 40px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .logo { display: flex; flex-direction: column; gap: 4px; }
+
+    .logo-eyebrow {
+      font-family: var(--mono); font-size: .7rem; font-weight: 500;
+      letter-spacing: .18em; text-transform: uppercase; color: var(--green);
+    }
+
+    .logo-title {
+      font-family: var(--serif); font-size: 2.6rem;
+      line-height: 1; color: var(--text); letter-spacing: -.01em;
+    }
+    .logo-title em { font-style: italic; color: var(--green); }
+
+    .status-pill {
+      font-family: var(--mono); font-size: .68rem; font-weight: 500;
+      letter-spacing: .12em; text-transform: uppercase;
+      padding: 6px 14px; border-radius: 999px;
+      border: 1px solid var(--border-2); color: var(--text-dim);
+      background: var(--surface); display: flex; align-items: center; gap: 8px;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--text-muted); transition: background .4s;
+    }
+    .status-dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+
+    /* ── Tab nav ──────────────────────────────────────────── */
+    .tab-nav {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 40px;
+      background: var(--surface);
+    }
+
+    .tab-btn {
+      flex: 1; padding: 11px 16px;
+      font-family: var(--mono); font-size: .72rem; font-weight: 500;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-muted); background: none; border: none;
+      border-right: 1px solid var(--border); cursor: pointer;
+      transition: color .15s, background .15s;
+    }
+    .tab-btn:last-child { border-right: none; }
+    .tab-btn:hover { color: var(--text-dim); background: var(--surface-2); }
+    .tab-btn.active { color: var(--green); background: var(--surface-2); }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* ── Upload zone ──────────────────────────────────────── */
+    .upload-zone {
+      border: 1.5px dashed var(--border-2); border-radius: 4px;
+      padding: 56px 32px; text-align: center; cursor: pointer;
+      transition: border-color .2s, background .2s, box-shadow .2s;
+      background: var(--surface);
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: var(--green); background: var(--surface-2);
+      box-shadow: inset 0 0 40px var(--green-glow);
+    }
+
+    .upload-icon { width: 52px; height: 52px; margin: 0 auto 20px; opacity: .5; }
+
+    .upload-title { font-family: var(--serif); font-size: 1.4rem; color: var(--text); margin-bottom: 8px; }
+
+    .upload-sub { font-family: var(--mono); font-size: .72rem; color: var(--text-dim); letter-spacing: .06em; }
+
+    #file-input { display: none; }
+
+    /* ── Preview ──────────────────────────────────────────── */
+    .preview-wrap {
+      display: none; margin-top: 24px;
+      border: 1px solid var(--border-2); border-radius: 4px;
+      overflow: hidden; background: var(--surface);
+    }
+    .preview-wrap.visible { display: block; }
+
+    .preview-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-size: .72rem; color: var(--text-dim);
+    }
+
+    .preview-img-wrap { display: flex; justify-content: center; padding: 24px; background: var(--bg); }
+    .preview-img-wrap img { max-height: 280px; max-width: 100%; border-radius: 2px; object-fit: contain; }
+
+    /* ── Location badge ───────────────────────────────────── */
+    .location-badge {
+      display: none; align-items: center; gap: 8px; margin-top: 10px;
+      padding: 7px 14px; border-radius: 3px;
+      border: 1px solid var(--border-2); background: var(--surface-2);
+      font-family: var(--mono); font-size: .7rem; color: var(--text-dim);
+    }
+    .location-badge.visible { display: flex; }
+    .location-badge .loc-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 6px var(--green); flex-shrink: 0;
+    }
+    .location-badge.denied { border-color: rgba(212,148,58,.3); color: var(--amber); }
+    .location-badge.denied .loc-dot { background: var(--amber); box-shadow: 0 0 6px var(--amber); }
+
+    /* ── Analyse button ───────────────────────────────────── */
+    .btn-analyse {
+      display: none; width: 100%; margin-top: 16px; padding: 16px;
+      background: var(--green); color: #0d1008; border: none; border-radius: 4px;
+      font-family: var(--mono); font-size: .85rem; font-weight: 500;
+      letter-spacing: .1em; text-transform: uppercase;
+      cursor: pointer; transition: background .15s, transform .1s;
+    }
+    .btn-analyse.visible { display: block; }
+    .btn-analyse:hover   { background: #8fd45d; }
+    .btn-analyse:active  { transform: scale(.99); }
+    .btn-analyse:disabled { background: var(--green-dim); cursor: not-allowed; opacity: .6; }
+
+    /* ── Spinner ──────────────────────────────────────────── */
+    .spinner-wrap { display: none; text-align: center; padding: 48px 0; }
+    .spinner-wrap.visible { display: block; }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 2px solid var(--border-2); border-top-color: var(--green);
+      border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto 16px;
+    }
+    .spinner-label { font-family: var(--mono); font-size: .72rem; color: var(--text-dim); letter-spacing: .1em; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Results ──────────────────────────────────────────── */
+    .results-section { display: none; margin-top: 48px; }
+    .results-section.visible { display: block; }
+
+    .section-label {
+      font-family: var(--mono); font-size: .68rem;
+      letter-spacing: .18em; text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+
+    .low-conf-banner {
+      display: none; background: rgba(212,148,58,.08); border: 1px solid rgba(212,148,58,.3);
+      border-radius: 4px; padding: 12px 16px; margin-bottom: 24px;
+      font-family: var(--mono); font-size: .75rem; color: var(--amber); letter-spacing: .04em;
+    }
+    .low-conf-banner.visible { display: block; }
+
+    /* ── Cards ────────────────────────────────────────────── */
+    .card {
+      border: 1px solid var(--border); border-radius: 4px;
+      background: var(--surface); margin-bottom: 16px; overflow: hidden;
+      animation: fadeUp .35s ease both;
+    }
+    .card:nth-child(2) { animation-delay: .07s; }
+    .card:nth-child(3) { animation-delay: .14s; }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .card-header { display: grid; grid-template-columns: 4px 1fr auto; align-items: stretch; border-bottom: 1px solid var(--border); }
+    .card-accent { }
+    .card-title-wrap { padding: 16px 20px; }
+    .card-name { font-family: var(--serif); font-size: 1.25rem; color: var(--text); margin-bottom: 4px; }
+    .card-badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+    .badge {
+      font-family: var(--mono); font-size: .63rem; font-weight: 500;
+      letter-spacing: .1em; text-transform: uppercase;
+      padding: 3px 9px; border-radius: 999px; border: 1px solid;
+    }
+    .badge-status       { border-color: var(--border-2); color: var(--text-dim); }
+    .badge-sev-none     { border-color: #22c55e44; color: #22c55e; background: #22c55e11; }
+    .badge-sev-low      { border-color: #eab30844; color: #eab308; background: #eab30811; }
+    .badge-sev-medium   { border-color: #f9731644; color: #f97316; background: #f9731611; }
+    .badge-sev-high     { border-color: #ef444444; color: #ef4444; background: #ef444411; }
+    .badge-sev-critical { border-color: #dc262644; color: #dc2626; background: #dc262611; animation: flash .8s infinite; }
+
+    @keyframes flash { 0%, 100% { opacity: 1; } 50% { opacity: .6; } }
+
+    .card-conf { padding: 16px 24px; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px; }
+    .conf-value { font-family: var(--mono); font-size: 1.6rem; font-weight: 300; color: var(--text); line-height: 1; }
+    .conf-label { font-family: var(--mono); font-size: .63rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
+
+    .conf-bar-wrap { padding: 0 20px 0 24px; margin-top: -8px; }
+    .conf-bar-bg { height: 3px; background: var(--border); border-radius: 999px; overflow: hidden; }
+    .conf-bar-fill { height: 100%; border-radius: 999px; transition: width 1s cubic-bezier(.16,1,.3,1); }
+
+    .card-body { padding: 20px 24px; }
+    .card-desc { font-size: .9rem; line-height: 1.65; color: var(--text-dim); margin-bottom: 16px; }
+    .actions-label { font-family: var(--mono); font-size: .63rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+    .actions-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+    .actions-list li { display: flex; gap: 10px; font-size: .875rem; line-height: 1.5; color: var(--text-dim); }
+    .action-num { font-family: var(--mono); font-size: .68rem; color: var(--text-muted); min-width: 20px; padding-top: 3px; }
+
+    .expert-flag {
+      display: flex; align-items: center; gap: 8px; margin-top: 16px;
+      padding: 10px 14px; border-radius: 3px;
+      background: var(--red-dim); border: 1px solid rgba(201,64,64,.25);
+      font-family: var(--mono); font-size: .72rem; color: var(--red);
+    }
+
+    /* ── MAP ──────────────────────────────────────────────── */
+    .map-intro { margin-bottom: 24px; }
+    .map-intro p { font-size: .9rem; color: var(--text-dim); line-height: 1.6; margin-top: 8px; }
+
+    .map-wrap { border: 1px solid var(--border-2); border-radius: 4px; overflow: visible; }
+
+    .map-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono); font-size: .7rem; color: var(--text-dim);
+    }
+
+    .map-toolbar-left { display: flex; align-items: center; gap: 12px; }
+
+    .map-count-pill {
+      background: var(--surface-2); border: 1px solid var(--border-2);
+      border-radius: 999px; padding: 3px 10px;
+      font-size: .65rem; color: var(--green);
+    }
+
+    .btn-refresh-map {
+      font-family: var(--mono); font-size: .65rem; letter-spacing: .08em; text-transform: uppercase;
+      color: var(--text-muted); background: none; border: 1px solid var(--border);
+      padding: 4px 10px; border-radius: 3px; cursor: pointer; transition: color .15s, border-color .15s;
+    }
+    .btn-refresh-map:hover { color: var(--green); border-color: var(--green); }
+
+    #disease-map { height: 480px; background: var(--bg); }
+
+    /* Dark-tint the OSM tiles so they match the theme */
+    .leaflet-tile { filter: brightness(0.65) saturate(0.5) hue-rotate(55deg); }
+    .leaflet-container { background: var(--bg) !important; font-family: var(--mono) !important; }
+
+    /* Dark popup */
+    .leaflet-popup-content-wrapper {
+      background: var(--surface-2) !important;
+      border: 1px solid var(--border-2) !important;
+      border-radius: 4px !important;
+      box-shadow: 0 8px 32px rgba(0,0,0,.7) !important;
+      color: var(--text) !important;
+      font-family: var(--body) !important;
+      padding: 0 !important;
+    }
+    .leaflet-popup-content { margin: 0 !important; }
+    .leaflet-popup-tip-container { display: none; }
+    .leaflet-popup-close-button {
+      color: var(--text-dim) !important; font-size: 18px !important;
+      top: 6px !important; right: 8px !important; z-index: 10;
+    }
+
+    .map-popup {
+      padding: 14px 16px; min-width: 200px;
+    }
+    .map-popup-name { font-family: var(--serif); font-size: 1rem; color: var(--text); margin-bottom: 8px; }
+    .map-popup-row { font-family: var(--mono); font-size: .67rem; color: var(--text-dim); margin-bottom: 4px; letter-spacing: .03em; }
+    .map-popup-sev {
+      display: inline-block; margin-top: 6px;
+      font-family: var(--mono); font-size: .6rem; letter-spacing: .1em; text-transform: uppercase;
+      padding: 2px 8px; border-radius: 999px; border: 1px solid currentColor;
+    }
+
+    .map-legend {
+      display: flex; flex-wrap: wrap; gap: 16px;
+      padding: 11px 16px; background: var(--surface);
+      border-top: 1px solid var(--border);
+      font-family: var(--mono); font-size: .65rem; color: var(--text-muted);
+      align-items: center;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+    /* ── History ──────────────────────────────────────────── */
+    .history-section { margin-top: 0; }
+
+    .history-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+    }
+
+    .btn-clear {
+      font-family: var(--mono); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+      color: var(--text-muted); background: none; border: 1px solid var(--border);
+      padding: 5px 12px; border-radius: 3px; cursor: pointer; transition: color .15s, border-color .15s;
+    }
+    .btn-clear:hover { color: var(--red); border-color: var(--red); }
+
+    .history-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+    .history-card {
+      border: 1px solid var(--border); border-radius: 4px; overflow: hidden;
+      background: var(--surface); cursor: pointer; transition: border-color .15s, transform .15s;
+    }
+    .history-card:hover { border-color: var(--border-2); transform: translateY(-2px); }
+
+    .history-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--bg); }
+    .history-info { padding: 10px 12px; border-top: 1px solid var(--border); }
+    .history-name { font-size: .8rem; color: var(--text); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .history-meta { font-family: var(--mono); font-size: .62rem; color: var(--text-muted); }
+    .history-empty { font-family: var(--mono); font-size: .75rem; color: var(--text-muted); padding: 24px 0; }
+
+    /* ── Error ────────────────────────────────────────────── */
+    .error-banner {
+      display: none; background: rgba(201,64,64,.08); border: 1px solid rgba(201,64,64,.3);
+      border-radius: 4px; padding: 14px 18px; margin-top: 16px;
+      font-family: var(--mono); font-size: .75rem; color: var(--red);
+    }
+    .error-banner.visible { display: block; }
+
+    /* ── Footer ───────────────────────────────────────────── */
+    footer {
+      margin-top: 80px; padding: 24px 0; border-top: 1px solid var(--border);
+      font-family: var(--mono); font-size: .68rem; color: var(--text-muted); letter-spacing: .06em;
+    }
+
+    /* ── Responsive ───────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .logo-title { font-size: 2rem; }
+      .card-header { grid-template-columns: 4px 1fr; }
+      .card-conf { display: none; }
+      #disease-map { height: 320px; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <span class="logo-eyebrow">AI Plant Diagnostics</span>
+      <h1 class="logo-title">Plant<em>Doc</em></h1>
+    </div>
+    <div class="status-pill">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Connecting…</span>
+    </div>
+  </header>
+
+  <!-- Tab nav -->
+  <div class="tab-nav">
+    <button class="tab-btn active" data-tab="scan">⬡ &nbsp;Scan leaf</button>
+    <button class="tab-btn" data-tab="map">◎ &nbsp;Disease map</button>
+    <button class="tab-btn" data-tab="history">⟳ &nbsp;History</button>
+  </div>
+
+  <!-- ══ TAB: SCAN ══════════════════════════════════════════ -->
+  <div class="tab-panel active" id="tab-scan">
+
+    <div class="upload-zone" id="drop-zone">
+      <svg class="upload-icon" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M26 36V18M26 18L19 25M26 18L33 25" stroke="#7bbf4e" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M14 40h24M10 30c-3.5-.8-6-4-6-7.5C4 18 7.5 14.5 12 14c.7-5 5-9 10.5-9 4 0 7.5 2 9.5 5 .7-.1 1.3-.2 2-.2C38.4 9.8 43 14.5 43 20.2c0 4.5-2.8 8.3-7 9.8" stroke="#7bbf4e" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <p class="upload-title">Drop a leaf image here</p>
+      <p class="upload-sub">or click to browse &nbsp;·&nbsp; JPEG / PNG / WEBP &nbsp;·&nbsp; max 10 MB</p>
+      <input type="file" id="file-input" accept="image/jpeg,image/png,image/webp" />
+    </div>
+
+    <div class="preview-wrap" id="preview-wrap">
+      <div class="preview-bar">
+        <span id="preview-filename">—</span>
+        <span id="preview-size">—</span>
+      </div>
+      <div class="preview-img-wrap">
+        <img id="preview-img" src="" alt="Preview" />
+      </div>
+    </div>
+
+    <div class="location-badge" id="location-badge">
+      <span class="loc-dot"></span>
+      <span id="location-text">Acquiring location…</span>
+    </div>
+
+    <button class="btn-analyse" id="btn-analyse">Analyse leaf →</button>
+    <div class="error-banner" id="error-banner"></div>
+
+    <div class="spinner-wrap" id="spinner">
+      <div class="spinner"></div>
+      <p class="spinner-label" id="spinner-label">Running inference…</p>
+    </div>
+
+    <div class="results-section" id="results-section">
+      <p class="section-label">Diagnosis results</p>
+      <div class="low-conf-banner" id="low-conf-banner">
+        ⚠ Low confidence — the model is uncertain. Try a clearer, well-lit photo of a single leaf.
+      </div>
+      <div id="heatmap-viewer" style="display:none; margin-bottom:24px; border:1px solid var(--border-2); border-radius:4px; background:var(--surface); padding:16px;">
+        <div style="font-family:var(--mono); font-size:.75rem; margin-bottom:8px;">
+          <b>🔥 AI Attention Map</b> &nbsp;<span style="font-size:.65rem; color:var(--text-muted);">Warmer colors = model focused here</span>
+        </div>
+        <img id="heatmap-img" src="" alt="Grad-CAM Heatmap" style="max-width:100%; max-height:320px; border-radius:3px; display:block; margin:0 auto;" />
+      </div>
+      <div id="cards-container"></div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: DISEASE MAP ═══════════════════════════════════ -->
+  <div class="tab-panel" id="tab-map">
+    <div class="map-intro">
+      <p class="section-label" style="margin-bottom:0;padding-bottom:0;border:none;">Global disease sightings</p>
+      <p>Every geo-tagged scan is plotted here. Marker color reflects severity. Zoom and click markers to inspect individual reports.</p>
+    </div>
+
+    <div class="map-wrap">
+      <div class="map-toolbar">
+        <div class="map-toolbar-left">
+          <span>Live scan data</span>
+          <span class="map-count-pill" id="map-count">0 reports</span>
+        </div>
+        <button class="btn-refresh-map" id="btn-refresh-map">↺ &nbsp;Refresh</button>
+      </div>
+
+      <div id="disease-map"></div>
+
+      <div class="map-legend">
+        <span style="margin-right:4px;">Severity:</span>
+        <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div><span>Healthy</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#eab308"></div><span>Low</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f97316"></div><span>Medium</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div><span>High</span></div>
+        <div class="legend-item"><div class="legend-dot" style="background:#dc2626"></div><span>Critical</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ TAB: HISTORY ═══════════════════════════════════════ -->
+  <div class="tab-panel" id="tab-history">
+    <div class="history-section">
+      <div class="history-header">
+        <p class="section-label" style="margin:0;border:none;padding:0;">Recent scans</p>
+        <button class="btn-clear" id="btn-clear-history">Clear history</button>
+      </div>
+      <div class="history-grid" id="history-grid">
+        <p class="history-empty">No scans yet.</p>
+      </div>
+    </div>
+  </div>
+
+  <footer>PlantDoc Vision &nbsp;·&nbsp; MobileNetV2 / PlantVillage &nbsp;·&nbsp; For reference only — always consult an agronomist for critical decisions.</footer>
+</div>
+
+<script>
+  const API = '';  // same origin; change to 'http://localhost:8000' for dev
+
+  // ── DOM refs ──────────────────────────────────────────────────────────────
+  const dropZone       = document.getElementById('drop-zone');
+  const fileInput      = document.getElementById('file-input');
+  const previewWrap    = document.getElementById('preview-wrap');
+  const previewImg     = document.getElementById('preview-img');
+  const previewFname   = document.getElementById('preview-filename');
+  const previewSize    = document.getElementById('preview-size');
+  const locationBadge  = document.getElementById('location-badge');
+  const locationText   = document.getElementById('location-text');
+  const btnAnalyse     = document.getElementById('btn-analyse');
+  const errorBanner    = document.getElementById('error-banner');
+  const spinner        = document.getElementById('spinner');
+  const spinnerLabel   = document.getElementById('spinner-label');
+  const resultsSection = document.getElementById('results-section');
+  const cardsContainer = document.getElementById('cards-container');
+  const lowConfBanner  = document.getElementById('low-conf-banner');
+  const historyGrid    = document.getElementById('history-grid');
+  const btnClearHist   = document.getElementById('btn-clear-history');
+  const statusDot      = document.getElementById('status-dot');
+  const statusText     = document.getElementById('status-text');
+  const heatmapViewer  = document.getElementById('heatmap-viewer');
+  const heatmapImg     = document.getElementById('heatmap-img');
+  const mapCount       = document.getElementById('map-count');
+  const btnRefreshMap  = document.getElementById('btn-refresh-map');
+
+  let selectedFile   = null;
+  let cachedLocation = null;
+  let leafletMap     = null;
+  let mapReady       = false;
+  let mapMarkers     = [];
+
+  // ── Health check ──────────────────────────────────────────────────────────
+  async function checkHealth() {
+    try {
+      const r = await fetch(`${API}/health`);
+      const d = await r.json();
+      if (d.model_loaded) {
+        statusDot.classList.add('online');
+        statusText.textContent = `Model ready · ${d.num_classes} classes`;
+      } else {
+        statusText.textContent = 'Model not loaded';
+      }
+    } catch {
+      statusText.textContent = 'API offline';
+    }
+  }
+  checkHealth();
+
+  // ── Tab switching ─────────────────────────────────────────────────────────
+// REPLACE your tab switching block with this:
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+
+    if (btn.dataset.tab === 'map') {
+      initMap();
+
+      setTimeout(() => {
+        leafletMap.invalidateSize();
+        loadMapData();
+      }, 50);
+    }
+    if (btn.dataset.tab === 'history') {
+      loadHistory();
+    }
+  });
+});
+
+  // ── Geolocation ───────────────────────────────────────────────────────────
+  function getLocation() {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve({ lat: null, lng: null });
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        ()    => resolve({ lat: null, lng: null })
+      );
+    });
+  }
+
+  async function requestAndCacheLocation() {
+    locationBadge.classList.remove('denied');
+    locationBadge.classList.add('visible');
+    locationText.textContent = 'Acquiring location…';
+
+    const loc = await getLocation();
+    cachedLocation = loc;
+
+    if (loc.lat !== null) {
+      locationText.textContent = `Location acquired · ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
+    } else {
+      locationBadge.classList.add('denied');
+      locationText.textContent = 'Location unavailable — scan will be untagged';
+    }
+  }
+
+  // ── File selection ────────────────────────────────────────────────────────
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) loadFile(f);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) loadFile(fileInput.files[0]);
+  });
+
+  function loadFile(file) {
+    selectedFile   = file;
+    cachedLocation = null;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      previewImg.src = ev.target.result;
+      previewFname.textContent = file.name;
+      previewSize.textContent = (file.size / 1024).toFixed(0) + ' KB';
+      previewWrap.classList.add('visible');
+      btnAnalyse.classList.add('visible');
+      hideResults();
+      hideError();
+    };
+    reader.readAsDataURL(file);
+    requestAndCacheLocation();
+  }
+
+  // ── Analyse ───────────────────────────────────────────────────────────────
+  btnAnalyse.addEventListener('click', analyse);
+
+  async function analyse() {
+    if (!selectedFile) return;
+    setLoading(true);
+    hideResults();
+    hideError();
+
+    if (cachedLocation === null) {
+      spinnerLabel.textContent = 'Getting location…';
+      cachedLocation = await getLocation();
+      spinnerLabel.textContent = 'Running inference…';
+    }
+
+    try {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      if (cachedLocation.lat !== null) {
+        fd.append('lat', cachedLocation.lat);
+        fd.append('lng', cachedLocation.lng);
+      }
+
+      const r = await fetch(`${API}/predict`, { method: 'POST', body: fd });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({ detail: r.statusText }));
+        throw new Error(err.detail || 'Request failed');
+      }
+
+      const data = await r.json();
+      renderResults(data);
+      loadHistory();
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      setLoading(false);
+      spinnerLabel.textContent = 'Running inference…';
+    }
+  }
+
+  // ── Render results ────────────────────────────────────────────────────────
+  function renderResults(data) {
+    cardsContainer.innerHTML = '';
+    lowConfBanner.classList.toggle('visible', data.low_confidence);
+
+    if (data.heatmap_b64) {
+      heatmapImg.src = 'data:image/png;base64,' + data.heatmap_b64;
+      heatmapViewer.style.display = 'block';
+    } else {
+      heatmapViewer.style.display = 'none';
+    }
+
+    data.predictions.forEach((p, i) => {
+      const card = buildCard(p, i);
+      cardsContainer.appendChild(card);
+      requestAnimationFrame(() => {
+        const fill = card.querySelector('.conf-bar-fill');
+        if (fill) fill.style.width = (p.confidence * 100).toFixed(1) + '%';
+      });
+    });
+
+    resultsSection.classList.add('visible');
+    resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function buildCard(p, rank) {
+    const sevClass = `badge-sev-${p.severity}`;
+    const isExpert = ['critical', 'high'].includes(p.severity) && p.status !== 'Healthy';
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="card-accent" style="background:${p.color}"></div>
+        <div class="card-title-wrap">
+          <div class="card-name">${p.display_name}</div>
+          <div class="card-badges">
+            <span class="badge badge-status">${p.status}</span>
+            <span class="badge ${sevClass}">Severity: ${p.severity}</span>
+            ${rank === 0 ? '<span class="badge" style="border-color:#7bbf4e44;color:#7bbf4e;background:#7bbf4e11">Top match</span>' : ''}
+          </div>
+        </div>
+        <div class="card-conf">
+          <span class="conf-value">${(p.confidence * 100).toFixed(1)}<small style="font-size:.9rem">%</small></span>
+          <span class="conf-label">Confidence</span>
+        </div>
+      </div>
+      <div class="conf-bar-wrap">
+        <div class="conf-bar-bg">
+          <div class="conf-bar-fill" style="width:0%;background:${p.color}"></div>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="card-desc">${p.description}</p>
+        <p class="actions-label">Recommended actions</p>
+        <ul class="actions-list">
+          ${p.actions.map((a, j) => `
+            <li>
+              <span class="action-num">0${j + 1}</span>
+              <span>${a}</span>
+            </li>`).join('')}
+        </ul>
+        ${isExpert ? `<div class="expert-flag">⚑ &nbsp;Consult an agronomist or plant pathologist for this condition.</div>` : ''}
+      </div>`;
+    return card;
+  }
+
+  // ── Leaflet Map ───────────────────────────────────────────────────────────
+  function initMap() {
+    if (mapReady) return;
+    mapReady = true;
+
+    leafletMap = L.map('disease-map', {
+      center: [20, 10],
+      zoom: 2,
+      zoomControl: true,
+      attributionControl: false,
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+    }).addTo(leafletMap);
+
+    // Custom attribution, styled to match
+    L.control.attribution({ prefix: false })
+      .addAttribution('<span style="font-family:var(--mono);font-size:.6rem;color:var(--text-muted)">© OpenStreetMap</span>')
+      .addTo(leafletMap);
+  }
+
+  async function loadMapData() {
+    try {
+      const r = await fetch(`${API}/map`);
+      const d = await r.json();
+
+      // Clear existing markers
+      mapMarkers.forEach(m => m.remove());
+      mapMarkers = [];
+
+      mapCount.textContent = `${d.count} report${d.count !== 1 ? 's' : ''}`;
+
+      if (d.count === 0) return;
+
+      d.points.forEach(p => {
+        const marker = L.circleMarker([p.lat, p.lng], {
+          color:       p.color,
+          fillColor:   p.color,
+          fillOpacity: 0.85,
+          radius:      10,
+          weight:      2,
+        }).addTo(leafletMap);
+
+        marker.bindPopup(`
+          <div class="map-popup">
+            <div class="map-popup-name">${p.top_prediction}</div>
+            <div class="map-popup-row">📍 ${p.lat.toFixed(4)}, ${p.lng.toFixed(4)}</div>
+            <div class="map-popup-row">🕐 ${p.timestamp}</div>
+            <span class="map-popup-sev" style="color:${p.color}">${p.severity}</span>
+          </div>
+        `);
+
+        mapMarkers.push(marker);
+      });
+
+      if (mapMarkers.length > 0) {
+        const group = L.featureGroup(mapMarkers);
+        leafletMap.fitBounds(group.getBounds().pad(0.3));
+      }
+    } catch (e) {
+      console.warn('Map data load failed:', e);
+    }
+  }
+
+  btnRefreshMap.addEventListener('click', loadMapData);
+
+  // ── History ───────────────────────────────────────────────────────────────
+  async function loadHistory() {
+    try {
+      const r = await fetch(`${API}/history`);
+      const d = await r.json();
+      renderHistory(d.history);
+    } catch { /* silent */ }
+  }
+
+  function renderHistory(items) {
+    if (!items || items.length === 0) {
+      historyGrid.innerHTML = '<p class="history-empty">No scans yet.</p>';
+      return;
+    }
+    historyGrid.innerHTML = '';
+    items.forEach(item => {
+      const hc = document.createElement('div');
+      hc.className = 'history-card';
+      hc.title = item.top_prediction;
+      hc.innerHTML = `
+        <img class="history-thumb" src="data:image/jpeg;base64,${item.image_b64}" alt="${item.top_prediction}" loading="lazy" />
+        <div class="history-info">
+          <div class="history-name">${item.top_prediction}</div>
+          <div class="history-meta">${item.top_confidence} · ${item.timestamp.split(' ')[1]}</div>
+        </div>`;
+      hc.addEventListener('click', () => {
+        // Switch back to scan tab and show the result
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        document.querySelector('[data-tab="scan"]').classList.add('active');
+        document.getElementById('tab-scan').classList.add('active');
+        renderResults({ predictions: item.predictions, low_confidence: item.low_confidence, heatmap_b64: item.heatmap_b64 });
+      });
+      historyGrid.appendChild(hc);
+    });
+  }
+
+  btnClearHist.addEventListener('click', async () => {
+    await fetch(`${API}/history`, { method: 'DELETE' });
+    renderHistory([]);
+  });
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function setLoading(on) {
+    spinner.classList.toggle('visible', on);
+    btnAnalyse.disabled = on;
+  }
+
+  function hideResults() {
+    resultsSection.classList.remove('visible');
+    lowConfBanner.classList.remove('visible');
+    cardsContainer.innerHTML = '';
+  }
+
+  function showError(msg) {
+    errorBanner.textContent = `Error: ${msg}`;
+    errorBanner.classList.add('visible');
+  }
+
+  function hideError() {
+    errorBanner.classList.remove('visible');
+  }
+
+  loadHistory();
+</script>
+</body>
+</html>

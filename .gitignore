@@ -1,0 +1,32 @@
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+.venv/
+env/
+ENV/
+.env
+*.log
+logs/
+*.sqlite3
+
+# Model weights and large binaries
+*.pth
+*.ckpt
+models/
+
+# keep base weights checked in
+!plantdoc_model_base.pth
+
+# Visual Studio / IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
