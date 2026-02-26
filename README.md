@@ -1,5 +1,4 @@
 # PlantDoc Vision
-
 Plant disease detection via leaf image analysis. Upload a photo and get a diagnosis with treatment recommendations.
 
 ---
@@ -15,6 +14,7 @@ Trained MobileNetV2 on 226,000+ labeled leaf images — 99.6% validation accurac
 - Sanitized API responses to prevent data leakage
 - Structured event logging and request analytics dashboard
 
+---
 
 ## Requirements
 
@@ -31,7 +31,7 @@ Trained MobileNetV2 on 226,000+ labeled leaf images — 99.6% validation accurac
 ## Installation
 ```bash
 git clone https://github.com/CharifKati/plantdoc-vision.git
-cd plantdoc/code
+cd plantdoc-vision
 python -m venv venv
 venv\Scripts\activate.bat
 pip install -r requirements.txt
@@ -45,7 +45,7 @@ Open http://127.0.0.1:8001
 
 ## Running after first install
 ```bash
-cd path\to\code
+cd plantdoc-vision
 venv\Scripts\activate.bat
 uvicorn api:app --host 127.0.0.1 --port 8001
 ```
@@ -65,13 +65,3 @@ uvicorn api:app --host 127.0.0.1 --port 8001
 > Note: Training pipeline uses PyTorch (MobileNetV2).
 > The Grad-CAM visualization module uses TensorFlow/Keras
 > and was built during the hackathon as a separate diagnostic tool.
-
-## Model weights and GitHub
-
-The trained model weights (e.g. `plantdoc_model_base.pth`) are ~11MB and are small enough to keep in the repository if you prefer a self-contained project.
-
-Recommended options:
-- Commit the `*.pth` file directly (convenient for demos and small teams).
-- Or host the weights on cloud storage and add a download link here if you prefer keeping the repo lightweight.
-
-If you want to remove the file from git history later, use a history-rewriting tool such as the BFG or `git filter-repo`.
